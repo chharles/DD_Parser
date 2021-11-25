@@ -103,7 +103,10 @@ def compile_filetype_signatures(filetype_signatures):
         trailer_pattern = None
         if signatures["trailer"]:
             trailer_pattern = re.compile(signatures["trailer"])
-        filetype_pattern[filetype] = {"header":header_pattern, "trailer":trailer_pattern, "extension":signatures["extension"]} # {filetype:{"header":header, "trailer":trailer}}
+        filetype_pattern[filetype] = {
+            "header":header_pattern, 
+            "trailer":trailer_pattern, 
+            "extension":signatures["extension"]} 
     return filetype_pattern
 
 filetype_patterns = compile_filetype_signatures(filetype_signatures)
@@ -148,7 +151,10 @@ def find_files(disk_image):
                 if trailer_match is None: break
                 # we have found a potential match based off of the header and the footer
                 length = (header_pos+trailer_match.end())-(current_position+header_match.start())
-                patterns["matches"].append({"start":current_position+header_match.start(), "end":header_pos+trailer_match.end(), "length":length})
+                patterns["matches"].append({
+                    "start":current_position+header_match.start(),
+                    "end":header_pos+trailer_match.end(),
+                    "length":length})
                 current_position += header_pos+trailer_match.end()
             else:
                 # we assume we have a file size within the header
@@ -163,7 +169,10 @@ def find_files(disk_image):
                 end = length_info["end"] + 1
                 length_bytes = match[start:end]
                 length = convert_bytes_to_int(length_bytes)
-                patterns["matches"].append({"start":current_position+header_match.start(), "end":header_pos+length, "length":length})
+                patterns["matches"].append({
+                    "start":current_position+header_match.start(), 
+                    "end":header_pos+length, 
+                    "length":length})
                 current_position += header_pos+length
         #print("matches:", patterns["matches"])
     return filetype_patterns
