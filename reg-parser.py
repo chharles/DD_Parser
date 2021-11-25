@@ -10,14 +10,14 @@ filetype_signatures= {
     "MPG1":{
         "extension":".mpg",
         "header":rb"\x00\x00\x01\xB3.\x00",
-        "trailer":rb"\x00\x00\x00\x01\xB7"},
+        "trailer":[rb"\x00\x00\x00\x01\xB7"]},
     # "MPEG-1 CD":{
     #     "header":rb"\x52\x49\x46\x46",
     #     "trailer":None},
     "MPEG-2 DVD":{
         "extension":".mpg",
         "header":rb"\x00\x00\x01\xBA.\x00",
-        "trailer":rb"\x00\x00\x00\x01\xB9"},
+        "trailer":[rb"\x00\x00\x00\x01\xB9"]},
     # "MPEG-3 ID3":{
     #     "header":rb"\x49\x44\x33",
     #     "trailer":None},
@@ -30,19 +30,19 @@ filetype_signatures= {
     "PDF1":{
         "extension":".pdf",
         "header":rb"\x25\x50\x44\x46",
-        "trailer":rb"\x0A\x25\x45\x4F\x46"}, # watch out for pdfs, there may be multiple eof marks within the file. GET THE LAST ONE 
+        "trailer":[rb"\x0A\x25\x45\x4F\x46"]}, # watch out for pdfs, there may be multiple eof marks within the file. GET THE LAST ONE 
     "PDF2":{
         "extension":".pdf",
         "header":rb"\x25\x50\x44\x46",
-        "trailer":rb"\x0A\x25\x45\x4F\x46\x0A"},
+        "trailer":[rb"\x0A\x25\x45\x4F\x46\x0A"]},
     "PDF3":{
         "extension":"pdf",
         "header":rb"\x25\x50\x44\x46",
-        "trailer":rb"\x0D\x0A\x25\x45\x4F\x46\x0D\x0A"},
+        "trailer":[rb"\x0D\x0A\x25\x45\x4F\x46\x0D\x0A"]},
     "PDF4":{
         "extension":".pdf",
         "header":rb"\x25\x50\x44\x46",
-        "trailer":rb"\x0D\x25\x25\x45\x4F\x0D"},
+        "trailer":[rb"\x0D\x25\x25\x45\x4F\x0D"]},
     "BMP":{
         "extension":".bmp",
         "header":rb"\x42\x4D....\x00\x00\x00\x00",
@@ -50,35 +50,35 @@ filetype_signatures= {
     "GIF87a":{
         "extension":".gif",
         "header":rb"\x47\x49\x46\x38\x37\x61",
-        "trailer":rb"\x00\x00\x3B"},
+        "trailer":[rb"\x00\x00\x3B"]},
     "GIF89a":{
         "extension":".gif",
         "header":rb"\x47\x49\x46\x38\x39\x61",
-        "trailer":rb"\x00\x00\x3B"},
+        "trailer":[rb"\x00\x00\x3B"]},
     "Standard JPEG":{
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE0",
-        "trailer":rb"\xFF\xD9"},
+        "trailer":[rb"\xFF\xD9"]},
     "JPEG with Exif metadata":{
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE1",
-        "trailer":rb"\xFF\xD9"},
+        "trailer":[rb"\xFF\xD9"]},
     "CIFF JPEG":{
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE2",
-        "trailer":rb"\xFF\xD9"},
+        "trailer":[rb"\xFF\xD9"]},
     "SPIFF JPEG":{
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE8",
-        "trailer":rb"\xFF\xD9"},
+        "trailer":[rb"\xFF\xD9"]},
     "TIFF0":{
         "extension":".tiff",
         "header":rb"\xFF\xD8\xFF\xE0",
-        "trailer":rb"\xFF\xD9"},
+        "trailer":[rb"\xFF\xD9"]},
     "DOCX":{
         "extension":".docx",
         "header":rb"\x50\x4B\x03\x04\x14\x00\x06\x00",
-        "trailer":rb"\x50\x4B\x05\x06.{18}"},
+        "trailer":[rb"\x50\x4B\x05\x06.{18}"]},
     "AVI":{
         "extension":".avi",
         "header":rb"\x52\x49\x46\x46....\x41\x56\x49\x20\x4C\x49\x53\x54",
@@ -86,7 +86,7 @@ filetype_signatures= {
     "PNG":{
         "extension":".png",
         "header":rb"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A",
-        "trailer":rb"\x49\x45\x4E\x44\xAE\x42\x60\x82"},
+        "trailer":[rb"\x49\x45\x4E\x44\xAE\x42\x60\x82"]},
 }
 
 filetype_length_bytes = {
@@ -100,12 +100,15 @@ def compile_filetype_signatures(filetype_signatures):
     filetype_pattern = {}
     for filetype, signatures in filetype_signatures.items():
         header_pattern = re.compile(signatures["header"])
-        trailer_pattern = None
+        trailers = []
         if signatures["trailer"]:
-            trailer_pattern = re.compile(signatures["trailer"])
+            for trailer in signatures["trailer"]:
+                trailers.append(re.compile(trailer))
+        if len(trailers) <= 0:
+            trailers = None
         filetype_pattern[filetype] = {
             "header":header_pattern, 
-            "trailer":trailer_pattern, 
+            "trailer":trailers, 
             "extension":signatures["extension"]} 
     return filetype_pattern
 
@@ -136,7 +139,7 @@ def find_files(disk_image):
 
     for filetype, patterns in filetype_patterns.items():
         header = patterns["header"]
-        trailer = patterns["trailer"]
+        trailers = patterns["trailer"]
         patterns["matches"] = []
         current_position = 0
         
@@ -144,17 +147,23 @@ def find_files(disk_image):
             header_match = header.search(image[current_position:])
             if header_match is None: break # if we don't find the header in the image
             header_pos = current_position+header_match.start() # where the header is in the disk image
-            
-            if trailer: # if there is a trailer for this filetype
-                trailer_match = trailer.search(image[header_pos:]) # search for the first trailer
-                if trailer_match is None: break # if we reach the end of the file and a trailer match has not been found, no file exists
-                # we have found a potential match based off of the header and the footer
-                length = (header_pos+trailer_match.end())-(current_position+header_match.start())
-                patterns["matches"].append({
-                    "start":current_position+header_match.start(),
-                    "end":header_pos+trailer_match.end(),
-                    "length":length})
-                current_position += header_pos+trailer_match.end()
+            match_found = False
+            if trailers: # if there is a trailer for this filetype
+                for trailer in trailers:
+                    trailer_match = trailer.search(image[header_pos:]) # search for the first trailer
+                    if trailer_match is None:
+                        match_found = False
+                        break # if we reach the end of the file and a trailer match has not been found, no file exists
+                    # we have found a potential match based off of the header and the footer
+                    length = (header_pos+trailer_match.end())-(current_position+header_match.start())
+                    patterns["matches"].append({
+                        "start":current_position+header_match.start(),
+                        "end":header_pos+trailer_match.end(),
+                        "length":length})
+                    current_position += header_pos+trailer_match.end()
+                    match_found = True
+                if not match_found:
+                    break
             else: # if there is no trailer for the filetype
                 match = header_match.group(0)
                 length_info = filetype_length_bytes[filetype]
