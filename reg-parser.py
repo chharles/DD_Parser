@@ -11,38 +11,14 @@ filetype_signatures= {
         "extension":".mpg",
         "header":rb"\x00\x00\x01\xB3.\x00",
         "trailer":[rb"\x00\x00\x00\x01\xB7"]},
-    # "MPEG-1 CD":{
-    #     "header":rb"\x52\x49\x46\x46",
-    #     "trailer":None},
     "MPEG-2 DVD":{
         "extension":".mpg",
         "header":rb"\x00\x00\x01\xBA.\x00",
         "trailer":[rb"\x00\x00\x00\x01\xB9"]},
-    # "MPEG-3 ID3":{
-    #     "header":rb"\x49\x44\x33",
-    #     "trailer":None},
-    # "MPEG-3 ftypM4A":{
-    #     "header":rb"\x66\x74\x79\x70\x4D\x34\x41\x20",
-    #     "trailer":None},
-    # "MPEG-4 MP4":{
-    #     "header":rb"\x66\x74\x79\x70\x6D\x70\x34\x32",
-    #     "trailer":None},
     "PDF1":{
         "extension":".pdf",
         "header":rb"\x25\x50\x44\x46",
-        "trailer":[rb"\x0A\x25\x45\x4F\x46"]}, # watch out for pdfs, there may be multiple eof marks within the file. GET THE LAST ONE 
-    "PDF2":{
-        "extension":".pdf",
-        "header":rb"\x25\x50\x44\x46",
-        "trailer":[rb"\x0A\x25\x45\x4F\x46\x0A"]},
-    "PDF3":{
-        "extension":"pdf",
-        "header":rb"\x25\x50\x44\x46",
-        "trailer":[rb"\x0D\x0A\x25\x45\x4F\x46\x0D\x0A"]},
-    "PDF4":{
-        "extension":".pdf",
-        "header":rb"\x25\x50\x44\x46",
-        "trailer":[rb"\x0D\x25\x25\x45\x4F\x0D"]},
+        "trailer":[rb"\x0A\x25\x25\x45\x4F\x46", rb"\x0A\x25\x25\x45\x4F\x46\x0A", rb"\x0D\x0A\x25\x25\x45\x4F\x46\x0D\x0A", rb"\x0D\x25\x25\x45\x4F\x0D"]}, # watch out for pdfs, there may be multiple eof marks within the file. GET THE LAST ONE 
     "BMP":{
         "extension":".bmp",
         "header":rb"\x42\x4D....\x00\x00\x00\x00",
@@ -142,28 +118,31 @@ def find_files(disk_image):
         trailers = patterns["trailer"]
         patterns["matches"] = []
         current_position = 0
-        
+        match_found = False
+
         while True:
             header_match = header.search(image[current_position:])
             if header_match is None: break # if we don't find the header in the image
             header_pos = current_position+header_match.start() # where the header is in the disk image
-            match_found = False
+            trailer_match = None
+
             if trailers: # if there is a trailer for this filetype
+                length = 0
                 for trailer in trailers:
-                    trailer_match = trailer.search(image[header_pos:]) # search for the first trailer
+                    trailer_match = trailer.search(image[header_pos+length:]) # search for the first trailer
                     if trailer_match is None:
-                        match_found = False
-                        break # if we reach the end of the file and a trailer match has not been found, no file exists
+                        continue # if we reach the end of the file and a trailer match has not been found, no file exists
                     # we have found a potential match based off of the header and the footer
-                    length = (header_pos+trailer_match.end())-(current_position+header_match.start())
-                    patterns["matches"].append({
-                        "start":current_position+header_match.start(),
-                        "end":header_pos+trailer_match.end(),
-                        "length":length})
-                    current_position += header_pos+trailer_match.end()
+                    length = trailer_match.end() + length
                     match_found = True
-                if not match_found:
+                if not match_found: # if no matches were found
                     break
+                patterns["matches"].append({
+                    "start":header_pos,
+                    "end":header_pos+length,
+                    "length":length})
+                current_position += header_pos+length
+
             else: # if there is no trailer for the filetype
                 match = header_match.group(0)
                 length_info = filetype_length_bytes[filetype]
@@ -177,7 +156,7 @@ def find_files(disk_image):
                     "length":length})
                 current_position += header_pos+length
         
-        #print("matches:", patterns["matches"])
+        print("matches:", patterns["matches"])
     return filetype_patterns
 
 def extract_files(filetype_patterns, disk_image):
