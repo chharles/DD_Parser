@@ -50,11 +50,11 @@ filetype_signatures= {
     "GIF87a":{
         "extension":".gif",
         "header":rb"\x47\x49\x46\x38\x37\x61",
-        "trailer":rb"\x00\x3B"},
+        "trailer":rb"\x00\x00\x3B"},
     "GIF89a":{
         "extension":".gif",
         "header":rb"\x47\x49\x46\x38\x39\x61",
-        "trailer":rb"\x00\x3B"},
+        "trailer":rb"\x00\x00\x3B"},
     "Standard JPEG":{
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE0",
@@ -142,13 +142,12 @@ def find_files(disk_image):
         
         while True:
             header_match = header.search(image[current_position:])
-            if header_match is None: break # if we don't find a match
-            # we have found a potential match based off of the header
-            # now we have to find the closest trailer
-            header_pos = current_position+header_match.start()
-            if trailer:
-                trailer_match = trailer.search(image[header_pos:])
-                if trailer_match is None: break
+            if header_match is None: break # if we don't find the header in the image
+            header_pos = current_position+header_match.start() # where the header is in the disk image
+            
+            if trailer: # if there is a trailer for this filetype
+                trailer_match = trailer.search(image[header_pos:]) # search for the first trailer
+                if trailer_match is None: break # if we reach the end of the file and a trailer match has not been found, no file exists
                 # we have found a potential match based off of the header and the footer
                 length = (header_pos+trailer_match.end())-(current_position+header_match.start())
                 patterns["matches"].append({
@@ -156,7 +155,7 @@ def find_files(disk_image):
                     "end":header_pos+trailer_match.end(),
                     "length":length})
                 current_position += header_pos+trailer_match.end()
-            else:
+            else: # if there is no trailer for the filetype
                 # we assume we have a file size within the header
                 #calculate the number of bytes from the header
                 ##this is dependent on the filetype and number of bytes
@@ -174,6 +173,7 @@ def find_files(disk_image):
                     "end":header_pos+length, 
                     "length":length})
                 current_position += header_pos+length
+        
         #print("matches:", patterns["matches"])
     return filetype_patterns
 
