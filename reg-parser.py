@@ -9,15 +9,15 @@ import hashlib
 filetype_signatures= {
     "MPG1":{
         "extension":".mpg",
-        "header":rb"\x00\x00\x01\xB3",
-        "trailer":rb"\x00\x00\x01\xB7"},
+        "header":rb"\x00\x00\x01\xB3.\x00",
+        "trailer":rb"\x00\x00\x00\x01\xB7"},
     # "MPEG-1 CD":{
     #     "header":rb"\x52\x49\x46\x46",
     #     "trailer":None},
     "MPEG-2 DVD":{
         "extension":".mpg",
-        "header":rb"\x00\x00\x01\xBA",
-        "trailer":rb"\x00\x00\x01\xB9"},
+        "header":rb"\x00\x00\x01\xBA.\x00",
+        "trailer":rb"\x00\x00\x00\x01\xB9"},
     # "MPEG-3 ID3":{
     #     "header":rb"\x49\x44\x33",
     #     "trailer":None},
@@ -156,12 +156,6 @@ def find_files(disk_image):
                     "length":length})
                 current_position += header_pos+trailer_match.end()
             else: # if there is no trailer for the filetype
-                # we assume we have a file size within the header
-                #calculate the number of bytes from the header
-                ##this is dependent on the filetype and number of bytes
-                ##
-                # increment the header position by the lengh
-                # add that value as the end position
                 match = header_match.group(0)
                 length_info = filetype_length_bytes[filetype]
                 start = length_info["start"]
