@@ -7,7 +7,7 @@ import re
 import hashlib
 
 filetype_signatures= {
-    "MPG1":{
+    "MPG":{
         "extension":".mpg",
         "header":rb"\x00\x00\x01\xB3.\x00",
         "trailer":[rb"\x00\x00\x00\x01\xB7"]},
@@ -15,7 +15,7 @@ filetype_signatures= {
         "extension":".mpg",
         "header":rb"\x00\x00\x01\xBA.\x00",
         "trailer":[rb"\x00\x00\x00\x01\xB9"]},
-    "PDF1":{
+    "PDF":{
         "extension":".pdf",
         "header":rb"\x25\x50\x44\x46",
         "trailer":[rb"\x0A\x25\x25\x45\x4F\x46", rb"\x0A\x25\x25\x45\x4F\x46\x0A", rb"\x0D\x0A\x25\x25\x45\x4F\x46\x0D\x0A", rb"\x0D\x25\x25\x45\x4F\x0D"]}, # watch out for pdfs, there may be multiple eof marks within the file. GET THE LAST ONE 
@@ -35,6 +35,10 @@ filetype_signatures= {
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE0",
         "trailer":[rb"\xFF\xD9"]},
+    "JPG":{
+        "extension":".jpg",
+        "header":rb"\xFF\xD8\xFF\xDB",
+        "trailer":[rb"\xFF\xD9"]},
     "JPEG with Exif metadata":{
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE1",
@@ -46,10 +50,6 @@ filetype_signatures= {
     "SPIFF JPEG":{
         "extension":".jpg",
         "header":rb"\xFF\xD8\xFF\xE8",
-        "trailer":[rb"\xFF\xD9"]},
-    "TIFF0":{
-        "extension":".tiff",
-        "header":rb"\xFF\xD8\xFF\xE0",
         "trailer":[rb"\xFF\xD9"]},
     "DOCX":{
         "extension":".docx",
@@ -90,23 +90,6 @@ def compile_filetype_signatures(filetype_signatures):
 
 filetype_patterns = compile_filetype_signatures(filetype_signatures)
 
-#gets the string representation of a byte or set of bytes
-def convert_byte_to_str(b):
-    byte_str = hex(b)[2:].zfill(2)
-    return byte_str
-
-#converts a set of bytes (little endian) to their integer equivalent 
-def convert_bytes_to_int(bs):
-    print(bs)
-    for b in bs:
-        print(hex(b)[2:].zfill(2), end="")
-    print()
-    byte_str_to_convert = ""
-    for b in bs:
-        byte_str_to_convert = convert_byte_to_str(b) + byte_str_to_convert
-    print(byte_str_to_convert)
-    return int(byte_str_to_convert, 16)
-
 # find_signatures
 def find_files(disk_image):
     global filetype_patterns
@@ -125,18 +108,45 @@ def find_files(disk_image):
         current_position = 0
         match_found = False
 
-        while True:
-            header_match = header.search(image[current_position:])
-            if header_match is None: break # if we don't find the header in the image
-            header_pos = current_position+header_match.start() # where the header is in the disk image
-            trailer_match = None
+        if "PDF" in filetype:
+            pdf_header_locations = []
+            header_match = header.search(image)
+            current_position = 0
+            while header_match != None:
+                pdf_header_locations.append(current_position+header_match.start())
+                current_position += header_match.end()
+                header_match = header.search(image[current_position:])
+            for i in range(len(pdf_header_locations)):
+                end_position = len(image)
+                if i + 1 < len(pdf_header_locations):
+                    end_position = pdf_header_locations[i+1]
+                current_position = pdf_header_locations[i]
+                trailer_match_locations = []
+                for trailer in trailers:
+                    trailer_match = trailer.search(image[current_position:end_position])
+                    while trailer_match != None:
+                        trailer_match_locations.append(current_position+trailer_match.end())
+                        current_position += trailer_match.end()
+                        trailer_match = trailer.search(image[current_position:end_position])
+                    current_position = pdf_header_locations[i]
+                trailer_match_locations.sort()
+                length = trailer_match_locations[-1] - pdf_header_locations[i]
+                patterns["matches"].append({
+                    "start":pdf_header_locations[i],
+                    "end":trailer_match_locations[-1],
+                    "length":length})                
+                    
+        else:
 
-            if trailers: # if there is a trailer for this filetype
-                length = 0
-                match_found = False
-                loop_again = True
-                while(loop_again):
-                    loop_again = False
+            while True:
+                header_match = header.search(image[current_position:])
+                if header_match is None: break # if we don't find the header in the image
+                header_pos = current_position+header_match.start() # where the header is in the disk image
+                trailer_match = None
+
+                if trailers: # if there is a trailer for this filetype
+                    length = 0
+                    match_found = False
                     for trailer in trailers:
                         trailer_match = trailer.search(image[header_pos+length:]) # search for the first trailer
                         if trailer_match is None:
@@ -144,29 +154,28 @@ def find_files(disk_image):
                         # we have found a potential match based off of the header and the footer
                         length = trailer_match.end() + length
                         match_found = True
-                        loop_again = True
-                    if "PDF" not in filetype:
-                        loop_again = False
-                if not match_found: # if no matches were found
-                    break
-                patterns["matches"].append({
-                    "start":header_pos,
-                    "end":header_pos+length,
-                    "length":length})
-                current_position += header_pos+length
+                    if not match_found: # if no matches were found
+                        break
+                    patterns["matches"].append({
+                        "start":header_pos,
+                        "end":header_pos+length,
+                        "length":length})
+                    current_position += header_pos+length
 
-            else: # if there is no trailer for the filetype
-                match = header_match.group(0)
-                length_info = filetype_length_bytes[filetype]
-                start = length_info["start"]
-                end = length_info["end"] 
-                length_bytes = match[start:end]
-                length = convert_bytes_to_int(length_bytes)
-                patterns["matches"].append({
-                    "start":current_position+header_match.start(), 
-                    "end":header_pos+length, 
-                    "length":length})
-                current_position += header_pos+length
+                else: # if there is no trailer for the filetype
+                    match = header_match.group(0)
+                    length_info = filetype_length_bytes[filetype]
+                    start = length_info["start"]
+                    end = length_info["end"] 
+                    length_bytes = match[start:end+1]
+                    length = int.from_bytes(length_bytes, byteorder='little')
+                    if "AVI" in filetype:
+                        length += 8
+                    patterns["matches"].append({
+                        "start":header_pos, 
+                        "end":header_pos+length, 
+                        "length":length})
+                    current_position += header_pos+length
         
         #print("matches:", patterns["matches"])
     return filetype_patterns
