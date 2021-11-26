@@ -97,9 +97,14 @@ def convert_byte_to_str(b):
 
 #converts a set of bytes (little endian) to their integer equivalent 
 def convert_bytes_to_int(bs):
+    print(bs)
+    for b in bs:
+        print(hex(b)[2:].zfill(2), end="")
+    print()
     byte_str_to_convert = ""
     for b in bs:
         byte_str_to_convert = convert_byte_to_str(b) + byte_str_to_convert
+    print(byte_str_to_convert)
     return int(byte_str_to_convert, 16)
 
 # find_signatures
@@ -128,13 +133,20 @@ def find_files(disk_image):
 
             if trailers: # if there is a trailer for this filetype
                 length = 0
-                for trailer in trailers:
-                    trailer_match = trailer.search(image[header_pos+length:]) # search for the first trailer
-                    if trailer_match is None:
-                        continue # if we reach the end of the file and a trailer match has not been found, no file exists
-                    # we have found a potential match based off of the header and the footer
-                    length = trailer_match.end() + length
-                    match_found = True
+                match_found = False
+                loop_again = True
+                while(loop_again):
+                    loop_again = False
+                    for trailer in trailers:
+                        trailer_match = trailer.search(image[header_pos+length:]) # search for the first trailer
+                        if trailer_match is None:
+                            continue # if we reach the end of the file and a trailer match has not been found, no file exists
+                        # we have found a potential match based off of the header and the footer
+                        length = trailer_match.end() + length
+                        match_found = True
+                        loop_again = True
+                    if "PDF" not in filetype:
+                        loop_again = False
                 if not match_found: # if no matches were found
                     break
                 patterns["matches"].append({
@@ -147,7 +159,7 @@ def find_files(disk_image):
                 match = header_match.group(0)
                 length_info = filetype_length_bytes[filetype]
                 start = length_info["start"]
-                end = length_info["end"] + 1
+                end = length_info["end"] 
                 length_bytes = match[start:end]
                 length = convert_bytes_to_int(length_bytes)
                 patterns["matches"].append({
@@ -156,7 +168,7 @@ def find_files(disk_image):
                     "length":length})
                 current_position += header_pos+length
         
-        print("matches:", patterns["matches"])
+        #print("matches:", patterns["matches"])
     return filetype_patterns
 
 def extract_files(filetype_patterns, disk_image):
@@ -193,10 +205,10 @@ def print_extracted_files(extracted_files):
     for f in extracted_files:
         print(f["name"])
         print("\tfiletype:", f["filetype"])
-        print("\tstart offset:", f["start"])
-        print("\tend offset:", f["end"])
-        print("\tlength:", f["length"])
-        print("\tsha256 sum:", f["sha256sum"])
+        print("\tstart offset:", hex(f["start"]))
+        print("\tend offset:", hex(f["end"]))
+        print("\tlength:", f["length"], "bytes")
+        print("\tsha256 hexdigest:", f["sha256sum"])
 
 def parse(disk_image):
 
